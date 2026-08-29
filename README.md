@@ -1,9 +1,7 @@
-# Online Calculator
+# 在线计算器
 
-A simple and clean online calculator.
+一个简洁的在线计算器工具。
 
-## Features
+## 使用方式
 
-- Basic arithmetic operations
-- Clean and intuitive interface
-- Mobile-friendly design
+直接在浏览器中进行数学计算，支持基本的加减乘除运算。
