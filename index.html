@@ -4,222 +4,172 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>在线计算器</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23448AFF'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='Arial'>🔢</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔢</text></svg>">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
-<!-- ========== 计算器界面 ========== -->
-<div id="calculator-view">
-    <div class="calc-shell">
-        <div class="calc-top-bar">
-            <span class="calc-brand">Calculator</span>
-            <div class="calc-solar">
-                <div class="solar-cell"></div>
-                <div class="solar-cell"></div>
-                <div class="solar-cell"></div>
-                <div class="solar-cell"></div>
-            </div>
-        </div>
-        <div class="calc-display">
-            <div class="calc-expr" id="calc-expr"></div>
-            <div class="calc-result" id="calc-result">0</div>
-        </div>
-        <div class="calc-buttons">
-            <button class="btn-func" data-action="clear">AC</button>
-            <button class="btn-func" data-action="toggle-sign">+/−</button>
-            <button class="btn-func" data-action="percent">%</button>
-            <button class="btn-op" data-action="operator" data-value="/">÷</button>
-
-            <button class="btn-num" data-action="number" data-value="7">7</button>
-            <button class="btn-num" data-action="number" data-value="8">8</button>
-            <button class="btn-num" data-action="number" data-value="9">9</button>
-            <button class="btn-op" data-action="operator" data-value="*">×</button>
-
-            <button class="btn-num" data-action="number" data-value="4">4</button>
-            <button class="btn-num" data-action="number" data-value="5">5</button>
-            <button class="btn-num" data-action="number" data-value="6">6</button>
-            <button class="btn-op" data-action="operator" data-value="-">−</button>
-
-            <button class="btn-num" data-action="number" data-value="1">1</button>
-            <button class="btn-num" data-action="number" data-value="2">2</button>
-            <button class="btn-num" data-action="number" data-value="3">3</button>
-            <button class="btn-op" data-action="operator" data-value="+">+</button>
-
-            <button class="btn-num btn-zero" data-action="number" data-value="0">0</button>
-            <button class="btn-num" data-action="decimal">.</button>
-            <button class="btn-eq" data-action="equals">=</button>
-        </div>
-    </div>
-</div>
-
-<!-- ========== 聊天应用界面 ========== -->
-<div id="app-view" style="display:none;">
-
-    <!-- 通用顶部栏 -->
-    <header class="app-header" id="app-header">
-        <button class="header-back" id="header-back" style="display:none;">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <h1 class="header-title" id="header-title">主客厅</h1>
-        <div class="header-actions" id="header-actions"></div>
-    </header>
-
-    <!-- 内容区 -->
-    <main class="app-content" id="app-content">
-
-        <!-- 聊天列表 -->
-        <div id="view-chat-list" class="view-page">
-            <div class="search-bar">
-                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="search-chat" placeholder="搜索聊天">
-            </div>
-            <div class="chat-list" id="chat-list">
-                <div class="empty-hint">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <p>暂无聊天</p>
-                    <p class="empty-sub">去「昏光庭院」添加好友开始聊天吧</p>
+    <div id="app">
+        <!-- Calculator View -->
+        <div id="calc-view" class="view active">
+            <div class="calc-inner">
+                <div class="calc-solar">
+                    <div class="solar-cell"></div>
+                    <div class="solar-cell"></div>
+                    <div class="solar-cell"></div>
+                    <div class="solar-cell"></div>
+                </div>
+                <div class="calc-brand">CASIO</div>
+                <div class="calc-display">
+                    <div class="calc-expr" id="calcExpr">&nbsp;</div>
+                    <div class="calc-result" id="calcResult">0</div>
+                </div>
+                <div class="calc-buttons">
+                    <button class="btn func" data-action="clear">AC</button>
+                    <button class="btn func" data-action="sign">±</button>
+                    <button class="btn func" data-action="percent">%</button>
+                    <button class="btn op" data-action="op" data-op="÷">÷</button>
+                    <button class="btn num" data-action="num" data-val="7">7</button>
+                    <button class="btn num" data-action="num" data-val="8">8</button>
+                    <button class="btn num" data-action="num" data-val="9">9</button>
+                    <button class="btn op" data-action="op" data-op="×">×</button>
+                    <button class="btn num" data-action="num" data-val="4">4</button>
+                    <button class="btn num" data-action="num" data-val="5">5</button>
+                    <button class="btn num" data-action="num" data-val="6">6</button>
+                    <button class="btn op" data-action="op" data-op="−">−</button>
+                    <button class="btn num" data-action="num" data-val="1">1</button>
+                    <button class="btn num" data-action="num" data-val="2">2</button>
+                    <button class="btn num" data-action="num" data-val="3">3</button>
+                    <button class="btn op" data-action="op" data-op="+">+</button>
+                    <button class="btn num zero" data-action="num" data-val="0">0</button>
+                    <button class="btn num" data-action="dot">.</button>
+                    <button class="btn eq" data-action="equals">=</button>
                 </div>
             </div>
         </div>
 
-        <!-- 聊天窗口 -->
-        <div id="view-chat-window" class="view-page" style="display:none;">
-            <div class="messages-container" id="messages-container"></div>
-            <div class="message-input-bar">
-                <button class="msg-action-btn" id="btn-edit-msg" title="编辑" style="display:none;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <input type="text" id="message-input" placeholder="输入消息..." maxlength="500">
-                <button class="send-btn" id="btn-send">发送</button>
+        <!-- Login Overlay -->
+        <div id="login-overlay" class="overlay">
+            <div class="login-card">
+                <div class="login-logo">💬</div>
+                <h2 class="login-title">登录</h2>
+                <div class="form-group">
+                    <input type="text" id="loginId" placeholder="账号" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPwd" placeholder="密码">
+                </div>
+                <button id="loginBtn" class="btn-primary">登录</button>
+                <p id="loginError" class="form-error"></p>
             </div>
         </div>
 
-        <!-- 添加好友 -->
-        <div id="view-add-friend" class="view-page" style="display:none;">
-            <div class="add-friend-section">
-                <div class="add-input-group">
-                    <input type="text" id="friend-id-input" placeholder="输入对方账号ID" maxlength="20">
-                    <button class="primary-btn" id="btn-add-friend">添加</button>
-                </div>
-                <div id="add-friend-result"></div>
-            </div>
-            <div class="section-title">我的好友</div>
-            <div class="friend-list" id="friend-list">
-                <div class="empty-hint">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <p>还没有好友</p>
-                    <p class="empty-sub">输入对方ID添加好友</p>
-                </div>
-            </div>
-        </div>
+        <!-- App View -->
+        <div id="app-view" class="view">
+            <!-- Header -->
+            <header id="appHeader" class="app-header">
+                <span id="headerTitle">主客厅</span>
+            </header>
 
-        <!-- 我的 -->
-        <div id="view-profile" class="view-page" style="display:none;">
-            <div class="profile-card">
-                <div class="profile-avatar" id="profile-avatar">U</div>
-                <div class="profile-info">
-                    <div class="profile-name" id="profile-name">未登录</div>
-                    <div class="profile-id" id="profile-id">ID: --</div>
-                </div>
-            </div>
-            <div class="settings-group">
-                <div class="settings-item" id="btn-change-pwd">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>修改密码</span>
-                    <svg class="arrow-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                </div>
-                <div class="settings-item" id="btn-theme-toggle">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                    <span>主题切换</span>
-                    <div class="theme-switch" id="theme-switch">
-                        <div class="theme-switch-thumb"></div>
+            <!-- Tab: 主客厅 -->
+            <div id="tab-chat" class="tab-content active">
+                <div id="chatList" class="chat-list"></div>
+                <div id="chatRoom" class="chat-room">
+                    <div class="chat-room-header">
+                        <button id="chatBackBtn" class="back-btn">‹</button>
+                        <span id="chatRoomName"></span>
+                    </div>
+                    <div id="chatMessages" class="chat-messages"></div>
+                    <div class="chat-input-bar">
+                        <input type="text" id="chatInput" placeholder="输入消息...">
+                        <button id="chatSendBtn" class="send-btn">发送</button>
                     </div>
                 </div>
-                <div class="settings-item danger" id="btn-logout">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    <span>退出登录</span>
+            </div>
+
+            <!-- Tab: 昏光庭院 -->
+            <div id="tab-friends" class="tab-content">
+                <div class="search-bar">
+                    <input type="text" id="friendSearchInput" placeholder="输入ID搜索用户">
+                    <button id="friendSearchBtn" class="search-btn">搜索</button>
+                </div>
+                <div id="friendSearchResult" class="friend-search-result"></div>
+                <div class="section-title">我的好友</div>
+                <div id="friendsList" class="friends-list"></div>
+                <div class="section-title">好友申请</div>
+                <div id="friendRequests" class="friend-requests"></div>
+            </div>
+
+            <!-- Tab: 我的 -->
+            <div id="tab-account" class="tab-content">
+                <div class="account-card">
+                    <div class="account-avatar" id="myAvatar">U</div>
+                    <div class="account-info">
+                        <div class="account-name" id="myName">-</div>
+                        <div class="account-id" id="myId">ID: -</div>
+                    </div>
+                </div>
+                <div class="settings-list">
+                    <div class="settings-item" id="settingPwd">
+                        <span>修改密码</span><span class="arrow">›</span>
+                    </div>
+                    <div class="settings-item" id="settingTheme">
+                        <span>深色模式</span>
+                        <label class="switch"><input type="checkbox" id="themeToggle"><span class="slider"></span></label>
+                    </div>
+                    <div class="settings-item" id="settingLogout">
+                        <span class="danger-text">退出登录</span><span class="arrow">›</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <nav class="tab-bar">
+                <div class="tab-item active" data-tab="chat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>主客厅</span>
+                </div>
+                <div class="tab-item" data-tab="friends">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>昏光庭院</span>
+                </div>
+                <div class="tab-item" data-tab="account">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span>我的</span>
+                </div>
+            </nav>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div id="pwdModal" class="modal">
+            <div class="modal-card">
+                <h3>修改密码</h3>
+                <div class="form-group">
+                    <input type="password" id="oldPwd" placeholder="当前密码">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="newPwd" placeholder="新密码">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="confirmPwd" placeholder="确认新密码">
+                </div>
+                <p id="pwdError" class="form-error"></p>
+                <div class="modal-actions">
+                    <button id="pwdCancel" class="btn-secondary">取消</button>
+                    <button id="pwdConfirm" class="btn-primary">确认</button>
                 </div>
             </div>
         </div>
-    </main>
 
-    <!-- 底部导航栏 -->
-    <nav class="tab-bar" id="tab-bar">
-        <div class="tab-item active" data-tab="chat">
-            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-            </svg>
-            <span>主客厅</span>
+        <!-- Message Context Menu -->
+        <div id="msgMenu" class="msg-context-menu">
+            <div class="menu-item" id="menuEdit">编辑</div>
+            <div class="menu-item" id="menuRecall">撤回</div>
+            <div class="menu-item" id="menuCopy">复制</div>
         </div>
-        <div class="tab-item" data-tab="friends">
-            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="8.5" cy="7" r="4"/>
-                <line x1="20" y1="8" x2="20" y2="14"/>
-                <line x1="23" y1="11" x2="17" y2="11"/>
-            </svg>
-            <span>昏光庭院</span>
-        </div>
-        <div class="tab-item" data-tab="profile">
-            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-            </svg>
-            <span>我的</span>
-        </div>
-    </nav>
-</div>
-
-<!-- ========== 弹窗层 ========== -->
-
-<!-- 登录弹窗 -->
-<div class="modal-overlay" id="modal-login" style="display:none;">
-    <div class="modal-box">
-        <h2 class="modal-title">登录</h2>
-        <div class="modal-form">
-            <input type="text" id="login-id" placeholder="账号ID" maxlength="20" autocomplete="off">
-            <input type="password" id="login-pwd" placeholder="密码" maxlength="32">
-        </div>
-        <button class="primary-btn full-width" id="btn-do-login">登录</button>
-        <p class="modal-footer-text" id="login-error" style="display:none;"></p>
     </div>
-</div>
 
-<!-- 修改密码弹窗 -->
-<div class="modal-overlay" id="modal-change-pwd" style="display:none;">
-    <div class="modal-box">
-        <h2 class="modal-title">修改密码</h2>
-        <div class="modal-form">
-            <input type="password" id="old-pwd" placeholder="当前密码" maxlength="32">
-            <input type="password" id="new-pwd" placeholder="新密码" maxlength="32">
-            <input type="password" id="confirm-pwd" placeholder="确认新密码" maxlength="32">
-        </div>
-        <button class="primary-btn full-width" id="btn-do-change-pwd">确认修改</button>
-        <p class="modal-footer-text" id="pwd-error" style="display:none;"></p>
-        <p class="modal-footer-text link" id="pwd-cancel">取消</p>
-    </div>
-</div>
-
-<!-- 消息操作菜单 -->
-<div class="msg-context-menu" id="msg-context-menu" style="display:none;">
-    <div class="ctx-item" data-ctx="copy">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        复制
-    </div>
-    <div class="ctx-item" data-ctx="edit">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        编辑
-    </div>
-    <div class="ctx-item danger" data-ctx="revoke">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        撤回
-    </div>
-</div>
-
-<!-- Toast 提示 -->
-<div class="toast" id="toast" style="display:none;"></div>
-
-<script src="js/app.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/calculator.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
