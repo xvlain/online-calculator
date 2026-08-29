@@ -1,859 +1,545 @@
-/* ===== App State ===== */
-const state = {
-    currentUser: null,
-    currentChat: null,
-    currentTab: 'chat',
-    editingMsgId: null,
-    contextMsgId: null,
-    calcDisplay: '0',
-    calcExpr: '',
-    calcOp: null,
-    calcPrev: null,
-    calcReset: false,
-};
+/**
+ * Main App Module
+ * Handles navigation, chat, friends, account, and theme.
+ */
+(function () {
+    let currentUser = null;
+    let activeChatWith = null;  // userId of current chat partner
+    let contextMsgId = null;    // message id for context menu
+    let pollTimer = null;
 
-/* ===== Storage Helpers ===== */
-const store = {
-    get(key, fallback) {
-        try {
-            const v = localStorage.getItem(key);
-            return v ? JSON.parse(v) : fallback;
-        } catch { return fallback; }
-    },
-    set(key, val) {
-        localStorage.setItem(key, JSON.stringify(val));
-    },
-    remove(key) {
-        localStorage.removeItem(key);
-    }
-};
+    // ===== DOM refs =====
+    const $ = id => document.getElementById(id);
+    const calcView = $('calc-view');
+    const appView = $('app-view');
+    const loginOverlay = $('login-overlay');
+    const headerTitle = $('headerTitle');
 
-function getUsers() { return store.get('calc_users', {}); }
-function saveUsers(u) { store.set('calc_users', u); }
-function getFriends() {
-    if (!state.currentUser) return [];
-    return store.get('calc_friends_' + state.currentUser.id, []);
-}
-function saveFriends(list) {
-    if (!state.currentUser) return;
-    store.set('calc_friends_' + state.currentUser.id, list);
-}
-function getMessages(peerId) {
-    if (!state.currentUser) return [];
-    const key = 'calc_msgs_' + chatKey(state.currentUser.id, peerId);
-    return store.get(key, []);
-}
-function saveMessages(peerId, msgs) {
-    if (!state.currentUser) return;
-    const key = 'calc_msgs_' + chatKey(state.currentUser.id, peerId);
-    store.set(key, msgs);
-}
-function chatKey(a, b) { return [a, b].sort().join('_'); }
+    // ===== Init =====
+    function init() {
+        // Apply saved theme
+        applyTheme(Store.getTheme());
 
-/* ===== Toast ===== */
-let toastTimer = null;
-function showToast(msg) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.animation = 'none';
-    el.offsetHeight;
-    el.style.animation = 'toastIn 0.2s';
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.style.display = 'none'; }, 1800);
-}
+        // Init calculator with secret trigger
+        Calculator.init(onSecretTrigger);
 
-/* ===== Calculator Logic ===== */
-function initCalculator() {
-    const exprEl = document.getElementById('calc-expr');
-    const resultEl = document.getElementById('calc-result');
+        // Tab bar
+        document.querySelectorAll('.tab-item').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
 
-    document.querySelectorAll('.calc-buttons button').forEach(btn => {
-        btn.addEventListener('click', () => handleCalcButton(btn));
-    });
+        // Login
+        $('loginBtn').addEventListener('click', handleLogin);
+        $('loginPwd').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
 
-    document.addEventListener('keydown', (e) => {
-        if (document.getElementById('calculator-view').style.display === 'none') return;
-        const key = e.key;
-        if (key >= '0' && key <= '9') calcInputNumber(key);
-        else if (key === '.') calcInputDecimal();
-        else if (key === '+') calcInputOp('+');
-        else if (key === '-') calcInputOp('-');
-        else if (key === '*') calcInputOp('*');
-        else if (key === '/') { e.preventDefault(); calcInputOp('/'); }
-        else if (key === 'Enter' || key === '=') calcEquals();
-        else if (key === 'Escape') calcClear();
-        else if (key === 'Backspace') calcBackspace();
-        else if (key === '%') calcPercent();
-        updateCalcDisplay();
-    });
-}
+        // Chat send
+        $('chatSendBtn').addEventListener('click', sendMessage);
+        $('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 
-function handleCalcButton(btn) {
-    const action = btn.dataset.action;
-    const value = btn.dataset.value;
+        // Chat back
+        $('chatBackBtn').addEventListener('click', closeChatRoom);
 
-    switch (action) {
-        case 'number': calcInputNumber(value); break;
-        case 'decimal': calcInputDecimal(); break;
-        case 'operator': calcInputOp(value); break;
-        case 'equals': calcEquals(); break;
-        case 'clear': calcClear(); break;
-        case 'toggle-sign': calcToggleSign(); break;
-        case 'percent': calcPercent(); break;
-    }
-    updateCalcDisplay();
-}
+        // Friend search
+        $('friendSearchBtn').addEventListener('click', searchFriend);
+        $('friendSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchFriend(); });
 
-function calcInputNumber(n) {
-    if (state.calcReset) {
-        state.calcDisplay = n;
-        state.calcReset = false;
-    } else {
-        state.calcDisplay = state.calcDisplay === '0' ? n : state.calcDisplay + n;
-    }
-}
+        // Account settings
+        $('settingPwd').addEventListener('click', () => openModal('pwdModal'));
+        $('settingLogout').addEventListener('click', handleLogout);
+        $('themeToggle').addEventListener('change', handleThemeChange);
 
-function calcInputDecimal() {
-    if (state.calcReset) {
-        state.calcDisplay = '0.';
-        state.calcReset = false;
-    } else if (!state.calcDisplay.includes('.')) {
-        state.calcDisplay += '.';
-    }
-}
+        // Password modal
+        $('pwdCancel').addEventListener('click', () => closeModal('pwdModal'));
+        $('pwdConfirm').addEventListener('click', handleChangePassword);
 
-function calcInputOp(op) {
-    if (state.calcOp && !state.calcReset) {
-        calcEquals(true);
-    }
-    state.calcPrev = parseFloat(state.calcDisplay);
-    state.calcOp = op;
-    state.calcExpr = state.calcDisplay + ' ' + opSymbol(op);
-    state.calcReset = true;
-}
+        // Context menu actions
+        $('menuEdit').addEventListener('click', () => handleEditMessage());
+        $('menuRecall').addEventListener('click', () => handleRecallMessage());
+        $('menuCopy').addEventListener('click', () => handleCopyMessage());
 
-function calcEquals(chaining) {
-    /* === Secret Password Check === */
-    if (!chaining && state.calcDisplay === '1314' && !state.calcOp) {
-        enterApp();
-        calcFullReset();
-        return;
+        // Close context menu on outside click
+        document.addEventListener('click', (e) => {
+            const menu = $('msgMenu');
+            if (menu.classList.contains('active') && !menu.contains(e.target)) {
+                menu.classList.remove('active');
+            }
+        });
+
+        // Check existing session
+        const existing = Store.getCurrentUser();
+        if (existing) {
+            currentUser = existing;
+            // Don't auto-enter app, stay on calculator
+        }
     }
 
-    if (state.calcOp === null) return;
-    const curr = parseFloat(state.calcDisplay);
-    const prev = state.calcPrev;
-    let result;
-
-    switch (state.calcOp) {
-        case '+': result = prev + curr; break;
-        case '-': result = prev - curr; break;
-        case '*': result = prev * curr; break;
-        case '/': result = curr === 0 ? 'Error' : prev / curr; break;
+    // ===== Secret Trigger =====
+    function onSecretTrigger() {
+        if (!currentUser) {
+            // Show login
+            setTimeout(() => {
+                loginOverlay.classList.add('active');
+                $('loginId').focus();
+            }, 600);
+        } else {
+            enterApp();
+        }
     }
 
-    if (typeof result === 'number') {
-        result = Math.round(result * 1e10) / 1e10;
-    }
+    // ===== Login =====
+    function handleLogin() {
+        const id = $('loginId').value.trim();
+        const pwd = $('loginPwd').value;
+        const errEl = $('loginError');
 
-    if (!chaining) {
-        state.calcExpr = prev + ' ' + opSymbol(state.calcOp) + ' ' + curr + ' =';
-    }
-
-    state.calcDisplay = String(result);
-    if (!chaining) {
-        state.calcOp = null;
-        state.calcPrev = null;
-    }
-    state.calcReset = true;
-}
-
-function calcClear() {
-    calcFullReset();
-    updateCalcDisplay();
-}
-
-function calcFullReset() {
-    state.calcDisplay = '0';
-    state.calcExpr = '';
-    state.calcOp = null;
-    state.calcPrev = null;
-    state.calcReset = false;
-}
-
-function calcToggleSign() {
-    if (state.calcDisplay !== '0') {
-        state.calcDisplay = state.calcDisplay.startsWith('-')
-            ? state.calcDisplay.slice(1)
-            : '-' + state.calcDisplay;
-    }
-}
-
-function calcPercent() {
-    state.calcDisplay = String(parseFloat(state.calcDisplay) / 100);
-}
-
-function calcBackspace() {
-    if (state.calcReset) return;
-    state.calcDisplay = state.calcDisplay.length > 1
-        ? state.calcDisplay.slice(0, -1)
-        : '0';
-}
-
-function opSymbol(op) {
-    return { '+': '+', '-': '−', '*': '×', '/': '÷' }[op] || op;
-}
-
-function updateCalcDisplay() {
-    document.getElementById('calc-expr').textContent = state.calcExpr;
-    const display = state.calcDisplay;
-    const resultEl = document.getElementById('calc-result');
-    resultEl.textContent = display;
-    resultEl.style.fontSize = display.length > 10 ? '32px' : display.length > 7 ? '40px' : '48px';
-}
-
-/* ===== App Entry ===== */
-function enterApp() {
-    const session = store.get('calc_session', null);
-    if (session) {
-        const users = getUsers();
-        if (users[session.id]) {
-            state.currentUser = users[session.id];
-            showAppView();
+        if (!id || !pwd) {
+            errEl.textContent = '请输入账号和密码';
             return;
         }
-    }
-    document.getElementById('modal-login').style.display = 'flex';
-    showAppView();
-}
 
-function showAppView() {
-    document.getElementById('calculator-view').style.display = 'none';
-    document.getElementById('app-view').style.display = 'flex';
-    switchTab('chat');
-    renderProfile();
-}
-
-/* ===== Tab Navigation ===== */
-function initTabs() {
-    document.querySelectorAll('.tab-item').forEach(tab => {
-        tab.addEventListener('click', () => {
-            const name = tab.dataset.tab;
-            switchTab(name);
-        });
-    });
-}
-
-function switchTab(name) {
-    state.currentTab = name;
-    document.querySelectorAll('.tab-item').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === name);
-    });
-
-    const views = { chat: 'view-chat-list', friends: 'view-add-friend', profile: 'view-profile' };
-    Object.values(views).forEach(id => {
-        document.getElementById(id).style.display = 'none';
-    });
-    document.getElementById(views[name]).style.display = 'block';
-
-    document.getElementById('view-chat-window').style.display = 'none';
-    state.currentChat = null;
-    state.editingMsgId = null;
-    document.getElementById('btn-edit-msg').style.display = 'none';
-    document.getElementById('message-input').placeholder = '输入消息...';
-
-    const titles = { chat: '主客厅', friends: '昏光庭院', profile: '我的' };
-    document.getElementById('header-title').textContent = titles[name];
-    document.getElementById('header-back').style.display = 'none';
-    document.getElementById('tab-bar').style.display = 'flex';
-
-    if (name === 'chat') renderChatList();
-    if (name === 'friends') renderFriendList();
-    if (name === 'profile') renderProfile();
-}
-
-/* ===== Auth ===== */
-function initAuth() {
-    document.getElementById('btn-do-login').addEventListener('click', doLogin);
-    document.getElementById('login-pwd').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doLogin();
-    });
-
-    document.getElementById('btn-do-change-pwd').addEventListener('click', doChangePwd);
-    document.getElementById('pwd-cancel').addEventListener('click', () => {
-        document.getElementById('modal-change-pwd').style.display = 'none';
-    });
-    document.getElementById('btn-change-pwd').addEventListener('click', () => {
-        document.getElementById('modal-change-pwd').style.display = 'flex';
-        document.getElementById('old-pwd').value = '';
-        document.getElementById('new-pwd').value = '';
-        document.getElementById('confirm-pwd').value = '';
-        document.getElementById('pwd-error').style.display = 'none';
-    });
-    document.getElementById('btn-logout').addEventListener('click', doLogout);
-}
-
-function doLogin() {
-    const id = document.getElementById('login-id').value.trim();
-    const pwd = document.getElementById('login-pwd').value;
-    const errEl = document.getElementById('login-error');
-
-    if (!id || !pwd) {
-        errEl.textContent = '请输入账号和密码';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    const users = getUsers();
-    if (!users[id]) {
-        errEl.textContent = '账号不存在';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (users[id].password !== pwd) {
-        errEl.textContent = '密码错误';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    state.currentUser = users[id];
-    store.set('calc_session', { id: id });
-    document.getElementById('modal-login').style.display = 'none';
-    document.getElementById('login-error').style.display = 'none';
-    document.getElementById('login-id').value = '';
-    document.getElementById('login-pwd').value = '';
-    renderProfile();
-    renderChatList();
-    showToast('登录成功');
-}
-
-function doChangePwd() {
-    const oldPwd = document.getElementById('old-pwd').value;
-    const newPwd = document.getElementById('new-pwd').value;
-    const confirmPwd = document.getElementById('confirm-pwd').value;
-    const errEl = document.getElementById('pwd-error');
-
-    if (!oldPwd || !newPwd || !confirmPwd) {
-        errEl.textContent = '请填写所有字段';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (oldPwd !== state.currentUser.password) {
-        errEl.textContent = '当前密码错误';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (newPwd !== confirmPwd) {
-        errEl.textContent = '两次输入的新密码不一致';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (newPwd.length < 4) {
-        errEl.textContent = '新密码至少4位';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    const users = getUsers();
-    users[state.currentUser.id].password = newPwd;
-    saveUsers(users);
-    state.currentUser.password = newPwd;
-
-    document.getElementById('modal-change-pwd').style.display = 'none';
-    showToast('密码修改成功');
-}
-
-function doLogout() {
-    state.currentUser = null;
-    state.currentChat = null;
-    store.remove('calc_session');
-    document.getElementById('app-view').style.display = 'none';
-    document.getElementById('calculator-view').style.display = 'flex';
-    calcFullReset();
-    updateCalcDisplay();
-    showToast('已退出登录');
-}
-
-/* ===== Chat List ===== */
-function renderChatList() {
-    const container = document.getElementById('chat-list');
-    const friends = getFriends();
-
-    if (friends.length === 0) {
-        container.innerHTML = `<div class="empty-hint">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <p>暂无聊天</p>
-            <p class="empty-sub">去「昏光庭院」添加好友开始聊天吧</p>
-        </div>`;
-        return;
-    }
-
-    const users = getUsers();
-    let html = '';
-
-    friends.forEach(fid => {
-        const friend = users[fid];
-        if (!friend) return;
-        const msgs = getMessages(fid);
-        const lastMsg = msgs.filter(m => !m.revoked).slice(-1)[0];
-        const lastText = lastMsg ? (lastMsg.revoked ? '消息已撤回' : lastMsg.text) : '暂无消息';
-        const lastTime = lastMsg ? formatTime(lastMsg.time) : '';
-        const initial = friend.id.charAt(0).toUpperCase();
-        const online = isOnline(fid) ? '<div class="online-dot"></div>' : '<div class="offline-dot"></div>';
-
-        html += `<div class="chat-item" data-friend="${fid}">
-            <div class="chat-avatar">${initial}${online}</div>
-            <div class="chat-info">
-                <div class="chat-name">${escapeHtml(friend.id)}</div>
-                <div class="chat-last-msg">${escapeHtml(lastText)}</div>
-            </div>
-            <div class="chat-time">${lastTime}</div>
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    container.querySelectorAll('.chat-item').forEach(item => {
-        item.addEventListener('click', () => openChat(item.dataset.friend));
-    });
-}
-
-/* ===== Chat Window ===== */
-function openChat(friendId) {
-    state.currentChat = friendId;
-    const users = getUsers();
-    const friend = users[friendId];
-    if (!friend) return;
-
-    document.getElementById('view-chat-list').style.display = 'none';
-    document.getElementById('view-chat-window').style.display = 'flex';
-    document.getElementById('tab-bar').style.display = 'none';
-    document.getElementById('header-back').style.display = 'flex';
-    document.getElementById('header-title').textContent = friend.id;
-
-    renderMessages();
-
-    const input = document.getElementById('message-input');
-    input.value = '';
-    input.focus();
-}
-
-function renderMessages() {
-    if (!state.currentChat) return;
-    const container = document.getElementById('messages-container');
-    const msgs = getMessages(state.currentChat);
-    const users = getUsers();
-
-    if (msgs.length === 0) {
-        container.innerHTML = '<div class="msg-time-hint">开始聊天吧</div>';
-        return;
-    }
-
-    let html = '';
-    let lastDate = '';
-
-    msgs.forEach(msg => {
-        const msgDate = new Date(msg.time).toLocaleDateString('zh-CN');
-        if (msgDate !== lastDate) {
-            html += `<div class="msg-time-hint">${msgDate}</div>`;
-            lastDate = msgDate;
+        const user = Store.login(id, pwd);
+        if (!user) {
+            errEl.textContent = '账号或密码错误';
+            return;
         }
 
-        const isMine = msg.from === state.currentUser.id;
-        const sender = users[msg.from];
-        const initial = (sender ? msg.from : '?').charAt(0).toUpperCase();
-        const editedClass = msg.edited ? ' edited' : '';
-        const revokedClass = msg.revoked ? ' revoked' : '';
-        const displayText = msg.revoked ? '消息已撤回' : escapeHtml(msg.text);
+        currentUser = user;
+        errEl.textContent = '';
+        $('loginId').value = '';
+        $('loginPwd').value = '';
+        loginOverlay.classList.remove('active');
+        enterApp();
+    }
 
-        html += `<div class="msg-row ${isMine ? 'mine' : 'other'}">
-            <div class="msg-avatar">${initial}</div>
-            <div class="msg-bubble${editedClass}${revokedClass}" data-msgid="${msg.id}">${displayText}</div>
-        </div>`;
-    });
+    // ===== Enter / Exit App =====
+    function enterApp() {
+        calcView.classList.remove('active');
+        appView.classList.add('active');
+        appView.classList.add('fade-in');
+        switchTab('chat');
+        renderAccountTab();
+        startPolling();
+    }
 
-    container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
+    function exitApp() {
+        appView.classList.remove('active');
+        calcView.classList.add('active');
+        closeChatRoom();
+        Calculator.reset();
+        stopPolling();
+    }
 
-    container.querySelectorAll('.msg-bubble:not(.revoked)').forEach(bubble => {
-        bubble.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            showContextMenu(e, bubble.dataset.msgid);
+    // ===== Tab Switching =====
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        $(('tab-' + tab)).classList.add('active');
+
+        const titles = { chat: '主客厅', friends: '昏光庭院', account: '我的' };
+        headerTitle.textContent = titles[tab] || '';
+
+        if (tab === 'chat') renderChatList();
+        if (tab === 'friends') renderFriendsTab();
+        if (tab === 'account') renderAccountTab();
+    }
+
+    // ===== Chat List =====
+    function renderChatList() {
+        const list = $('chatList');
+        const friends = Store.getFriends(currentUser.id);
+
+        if (!friends.length) {
+            list.innerHTML = '<div class="empty-tip">还没有好友，去昏光庭院加几个吧</div>';
+            return;
+        }
+
+        let html = '';
+        friends.forEach(fid => {
+            const msgs = Store.getMessages(currentUser.id, fid);
+            const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
+            const isOnline = Store.isOnline(fid);
+
+            let lastText = '暂无消息';
+            let lastTime = '';
+            if (lastMsg) {
+                lastText = lastMsg.recalled ? '消息已撤回' : lastMsg.content;
+                lastTime = formatTime(lastMsg.createdAt);
+            }
+
+            html += `<div class="chat-item" data-uid="${fid}">
+                <div class="avatar">${fid.charAt(0).toUpperCase()}
+                    <span class="${isOnline ? 'online-dot' : 'offline-dot'}"></span>
+                </div>
+                <div class="chat-item-info">
+                    <div class="chat-item-name">${esc(fid)}</div>
+                    <div class="chat-item-last">${esc(lastText)}</div>
+                </div>
+                <div class="chat-item-time">${lastTime}</div>
+            </div>`;
         });
-        bubble.addEventListener('click', (e) => {
-            if (e.detail === 2) {
-                showContextMenu(e, bubble.dataset.msgid);
+
+        list.innerHTML = html;
+
+        // Click to open chat
+        list.querySelectorAll('.chat-item').forEach(item => {
+            item.addEventListener('click', () => openChatRoom(item.dataset.uid));
+        });
+    }
+
+    // ===== Chat Room =====
+    function openChatRoom(friendId) {
+        activeChatWith = friendId;
+        $('chatRoomName').textContent = friendId;
+        $('chatRoom').classList.add('active');
+        headerTitle.style.display = 'none';
+        renderMessages();
+        $('chatInput').focus();
+    }
+
+    function closeChatRoom() {
+        activeChatWith = null;
+        $('chatRoom').classList.remove('active');
+        headerTitle.style.display = '';
+    }
+
+    function renderMessages() {
+        if (!activeChatWith) return;
+        const container = $('chatMessages');
+        const msgs = Store.getMessages(currentUser.id, activeChatWith);
+
+        let html = '';
+        let lastDate = '';
+
+        msgs.forEach(msg => {
+            const date = new Date(msg.createdAt).toLocaleDateString('zh-CN');
+            if (date !== lastDate) {
+                html += `<div class="msg-time">${date} ${formatTimeFull(msg.createdAt)}</div>`;
+                lastDate = date;
+            }
+
+            const isSelf = msg.from === currentUser.id;
+            const sender = isSelf ? currentUser.id : activeChatWith;
+
+            if (msg.recalled) {
+                html += `<div class="msg-row ${isSelf ? 'self' : 'other'}">
+                    <div class="msg-avatar">${sender.charAt(0).toUpperCase()}</div>
+                    <div class="msg-bubble recalled">消息已撤回</div>
+                </div>`;
+            } else {
+                html += `<div class="msg-row ${isSelf ? 'self' : 'other'}" data-msgid="${msg.id}">
+                    <div class="msg-avatar">${sender.charAt(0).toUpperCase()}</div>
+                    <div class="msg-bubble${msg.edited ? ' edited' : ''}">${esc(msg.content)}</div>
+                </div>`;
             }
         });
 
-        let pressTimer;
-        bubble.addEventListener('touchstart', (e) => {
-            pressTimer = setTimeout(() => {
-                showContextMenu(e.touches[0], bubble.dataset.msgid);
-            }, 500);
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+
+        // Long press / right click for context menu
+        container.querySelectorAll('.msg-row.self .msg-bubble:not(.recalled)').forEach(bubble => {
+            const row = bubble.closest('.msg-row');
+            const msgId = row.dataset.msgid;
+
+            bubble.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showContextMenu(e.clientX, e.clientY, msgId);
+            });
+
+            let pressTimer;
+            bubble.addEventListener('touchstart', (e) => {
+                pressTimer = setTimeout(() => {
+                    const touch = e.touches[0];
+                    showContextMenu(touch.clientX, touch.clientY, msgId);
+                }, 500);
+            });
+            bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
+            bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
         });
-        bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
-        bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
-    });
-}
+    }
 
-function sendMessage() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    if (!text || !state.currentChat) return;
+    function sendMessage() {
+        const input = $('chatInput');
+        const text = input.value.trim();
+        if (!text || !activeChatWith) return;
 
-    const msgs = getMessages(state.currentChat);
+        Store.sendMessage(currentUser.id, activeChatWith, text);
+        input.value = '';
+        renderMessages();
+    }
 
-    if (state.editingMsgId) {
-        const idx = msgs.findIndex(m => m.id === state.editingMsgId);
-        if (idx !== -1) {
-            msgs[idx].text = text;
-            msgs[idx].edited = true;
+    // ===== Context Menu =====
+    function showContextMenu(x, y, msgId) {
+        contextMsgId = msgId;
+        const menu = $('msgMenu');
+        menu.style.left = Math.min(x, window.innerWidth - 120) + 'px';
+        menu.style.top = Math.min(y, window.innerHeight - 140) + 'px';
+        menu.classList.add('active');
+    }
+
+    function handleEditMessage() {
+        $('msgMenu').classList.remove('active');
+        if (!contextMsgId) return;
+        const msgs = Store.getMessages(currentUser.id, activeChatWith);
+        const msg = msgs.find(m => m.id === contextMsgId);
+        if (!msg || msg.from !== currentUser.id || msg.recalled) return;
+
+        const newContent = prompt('编辑消息', msg.content);
+        if (newContent !== null && newContent.trim()) {
+            Store.editMessage(contextMsgId, currentUser.id, newContent.trim());
+            renderMessages();
         }
-        state.editingMsgId = null;
-        document.getElementById('btn-edit-msg').style.display = 'none';
-        document.getElementById('message-input').placeholder = '输入消息...';
-    } else {
-        msgs.push({
-            id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-            from: state.currentUser.id,
-            text: text,
-            time: Date.now(),
-            edited: false,
-            revoked: false
-        });
     }
 
-    saveMessages(state.currentChat, msgs);
-    input.value = '';
-    renderMessages();
-}
+    function handleRecallMessage() {
+        $('msgMenu').classList.remove('active');
+        if (!contextMsgId) return;
+        Store.recallMessage(contextMsgId, currentUser.id);
+        renderMessages();
+    }
 
-function showContextMenu(e, msgId) {
-    const msgs = getMessages(state.currentChat);
-    const msg = msgs.find(m => m.id === msgId);
-    if (!msg || msg.revoked) return;
-
-    state.contextMsgId = msgId;
-    const menu = document.getElementById('msg-context-menu');
-    const isMine = msg.from === state.currentUser.id;
-
-    menu.querySelector('[data-ctx="edit"]').style.display = isMine ? 'flex' : 'none';
-    menu.querySelector('[data-ctx="revoke"]').style.display = isMine ? 'flex' : 'none';
-
-    const x = Math.min(e.clientX || e.pageX, window.innerWidth - 140);
-    const y = Math.min(e.clientY || e.pageY, window.innerHeight - 150);
-    menu.style.left = x + 'px';
-    menu.style.top = y + 'px';
-    menu.style.display = 'block';
-}
-
-function initContextMenu() {
-    document.addEventListener('click', (e) => {
-        const menu = document.getElementById('msg-context-menu');
-        if (!menu.contains(e.target)) {
-            menu.style.display = 'none';
+    function handleCopyMessage() {
+        $('msgMenu').classList.remove('active');
+        if (!contextMsgId) return;
+        const msgs = Store.getMessages(currentUser.id, activeChatWith);
+        const msg = msgs.find(m => m.id === contextMsgId);
+        if (msg && !msg.recalled) {
+            navigator.clipboard.writeText(msg.content).catch(() => {});
         }
-    });
-
-    document.querySelectorAll('.ctx-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const action = item.dataset.ctx;
-            const msgId = state.contextMsgId;
-            document.getElementById('msg-context-menu').style.display = 'none';
-
-            if (!msgId || !state.currentChat) return;
-            const msgs = getMessages(state.currentChat);
-            const msg = msgs.find(m => m.id === msgId);
-            if (!msg) return;
-
-            switch (action) {
-                case 'copy':
-                    copyText(msg.text);
-                    showToast('已复制');
-                    break;
-                case 'edit':
-                    if (msg.from === state.currentUser.id) {
-                        state.editingMsgId = msgId;
-                        const input = document.getElementById('message-input');
-                        input.value = msg.text;
-                        input.focus();
-                        document.getElementById('btn-edit-msg').style.display = 'flex';
-                        document.getElementById('message-input').placeholder = '编辑消息...';
-                    }
-                    break;
-                case 'revoke':
-                    if (msg.from === state.currentUser.id) {
-                        msg.revoked = true;
-                        saveMessages(state.currentChat, msgs);
-                        renderMessages();
-                        showToast('已撤回');
-                    }
-                    break;
-            }
-        });
-    });
-
-    document.getElementById('btn-edit-msg').addEventListener('click', () => {
-        state.editingMsgId = null;
-        document.getElementById('message-input').value = '';
-        document.getElementById('btn-edit-msg').style.display = 'none';
-        document.getElementById('message-input').placeholder = '输入消息...';
-    });
-}
-
-function copyText(text) {
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-    } else {
-        fallbackCopy(text);
-    }
-}
-
-function fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-}
-
-/* ===== Friends ===== */
-function initFriends() {
-    document.getElementById('btn-add-friend').addEventListener('click', doAddFriend);
-    document.getElementById('friend-id-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doAddFriend();
-    });
-}
-
-function doAddFriend() {
-    const input = document.getElementById('friend-id-input');
-    const fid = input.value.trim();
-    const resultEl = document.getElementById('add-friend-result');
-
-    if (!fid) {
-        showToast('请输入账号ID');
-        return;
-    }
-    if (fid === state.currentUser.id) {
-        showToast('不能添加自己');
-        return;
     }
 
-    const users = getUsers();
-    if (!users[fid]) {
-        resultEl.innerHTML = `<div class="friend-result-card">
-            <div class="friend-avatar">?</div>
-            <div class="result-info">
-                <div class="result-name">${escapeHtml(fid)}</div>
-                <div class="result-id">该用户不存在</div>
+    // ===== Friends Tab =====
+    function renderFriendsTab() {
+        renderFriendsList();
+        renderFriendRequests();
+        $('friendSearchResult').innerHTML = '';
+        $('friendSearchInput').value = '';
+    }
+
+    function searchFriend() {
+        const id = $('friendSearchInput').value.trim();
+        const resultDiv = $('friendSearchResult');
+        if (!id) { resultDiv.innerHTML = ''; return; }
+
+        const user = Store.getUser(id);
+        if (!user) {
+            resultDiv.innerHTML = '<div class="empty-tip" style="padding:20px">未找到该用户</div>';
+            return;
+        }
+        if (user.id === currentUser.id) {
+            resultDiv.innerHTML = '<div class="empty-tip" style="padding:20px">不能加自己为好友</div>';
+            return;
+        }
+
+        const friends = Store.getFriends(currentUser.id);
+        const isFriend = friends.includes(user.id);
+        const pending = Store.getPendingRequests(currentUser.id);
+        const sentRequests = (JSON.parse(localStorage.getItem('oc_friends') || '[]'))
+            .filter(f => f.from === currentUser.id && f.to === user.id && f.status === 'pending');
+        const alreadySent = sentRequests.length > 0;
+
+        let btnHtml;
+        if (isFriend) {
+            btnHtml = '<button class="add-friend-btn" disabled>已添加</button>';
+        } else if (alreadySent) {
+            btnHtml = '<button class="add-friend-btn" disabled>已发送</button>';
+        } else {
+            btnHtml = `<button class="add-friend-btn" onclick="window._sendFriendReq('${esc(user.id)}')">添加</button>`;
+        }
+
+        const isOnline = Store.isOnline(user.id);
+        resultDiv.innerHTML = `<div class="search-result-item slide-up">
+            <div class="avatar">${user.id.charAt(0).toUpperCase()}
+                <span class="${isOnline ? 'online-dot' : 'offline-dot'}"></span>
             </div>
-        </div>`;
-        return;
-    }
-
-    const friends = getFriends();
-    if (friends.includes(fid)) {
-        resultEl.innerHTML = `<div class="friend-result-card">
-            <div class="friend-avatar">${fid.charAt(0).toUpperCase()}</div>
-            <div class="result-info">
-                <div class="result-name">${escapeHtml(fid)}</div>
-                <div class="result-id">已是好友</div>
+            <div class="search-result-info">
+                <div class="search-result-name">${esc(user.id)}</div>
+                <div class="search-result-id">ID: ${esc(user.id)}</div>
             </div>
+            ${btnHtml}
         </div>`;
-        return;
     }
 
-    friends.push(fid);
-    saveFriends(friends);
-
-    const peerFriends = store.get('calc_friends_' + fid, []);
-    if (!peerFriends.includes(state.currentUser.id)) {
-        peerFriends.push(state.currentUser.id);
-        store.set('calc_friends_' + fid, peerFriends);
-    }
-
-    resultEl.innerHTML = `<div class="friend-result-card">
-        <div class="friend-avatar">${fid.charAt(0).toUpperCase()}</div>
-        <div class="result-info">
-            <div class="result-name">${escapeHtml(fid)}</div>
-            <div class="result-id" style="color:var(--primary)">已添加为好友</div>
-        </div>
-    </div>`;
-
-    input.value = '';
-    renderFriendList();
-    showToast('添加成功');
-}
-
-function renderFriendList() {
-    const container = document.getElementById('friend-list');
-    const friends = getFriends();
-    const users = getUsers();
-
-    if (friends.length === 0) {
-        container.innerHTML = `<div class="empty-hint">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <p>还没有好友</p>
-            <p class="empty-sub">输入对方ID添加好友</p>
-        </div>`;
-        return;
-    }
-
-    let html = '';
-    friends.forEach(fid => {
-        const user = users[fid];
-        if (!user) return;
-        const initial = fid.charAt(0).toUpperCase();
-        const online = isOnline(fid);
-        const statusDot = online
-            ? '<div class="online-dot" style="position:absolute;bottom:1px;right:1px;width:8px;height:8px;border-radius:50%;background:#4CD964;border:2px solid var(--surface);"></div>'
-            : '<div class="offline-dot" style="position:absolute;bottom:1px;right:1px;width:8px;height:8px;border-radius:50%;background:#C7C7CC;border:2px solid var(--surface);"></div>';
-
-        html += `<div class="friend-item" data-friend="${fid}">
-            <div class="friend-avatar">${initial}${statusDot}</div>
-            <div class="friend-name">${escapeHtml(fid)}</div>
-            <div class="friend-status">${online ? '在线' : '离线'}</div>
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    container.querySelectorAll('.friend-item').forEach(item => {
-        item.addEventListener('click', () => {
-            switchTab('chat');
-            setTimeout(() => openChat(item.dataset.friend), 50);
-        });
-    });
-}
-
-function isOnline(userId) {
-    const key = 'calc_online_' + userId;
-    const lastSeen = store.get(key, 0);
-    return (Date.now() - lastSeen) < 30000;
-}
-
-function heartbeat() {
-    if (state.currentUser) {
-        store.set('calc_online_' + state.currentUser.id, Date.now());
-    }
-}
-
-/* ===== Profile ===== */
-function renderProfile() {
-    if (!state.currentUser) {
-        document.getElementById('profile-name').textContent = '未登录';
-        document.getElementById('profile-id').textContent = 'ID: --';
-        document.getElementById('profile-avatar').textContent = 'U';
-        return;
-    }
-
-    const initial = state.currentUser.id.charAt(0).toUpperCase();
-    document.getElementById('profile-avatar').textContent = initial;
-    document.getElementById('profile-name').textContent = state.currentUser.id;
-    document.getElementById('profile-id').textContent = 'ID: ' + state.currentUser.id;
-}
-
-/* ===== Theme ===== */
-function initTheme() {
-    const saved = store.get('calc_theme', 'light');
-    applyTheme(saved);
-
-    document.getElementById('btn-theme-toggle').addEventListener('click', () => {
-        const current = store.get('calc_theme', 'light');
-        const next = current === 'light' ? 'dark' : 'light';
-        applyTheme(next);
-        store.set('calc_theme', next);
-    });
-}
-
-function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    const sw = document.getElementById('theme-switch');
-    if (theme === 'dark') {
-        sw.classList.add('active');
-    } else {
-        sw.classList.remove('active');
-    }
-}
-
-/* ===== Header Back ===== */
-function initHeaderBack() {
-    document.getElementById('header-back').addEventListener('click', () => {
-        if (state.currentChat) {
-            document.getElementById('view-chat-window').style.display = 'none';
-            document.getElementById('view-chat-list').style.display = 'block';
-            document.getElementById('header-back').style.display = 'none';
-            document.getElementById('header-title').textContent = '主客厅';
-            document.getElementById('tab-bar').style.display = 'flex';
-            state.currentChat = null;
-            state.editingMsgId = null;
-            document.getElementById('btn-edit-msg').style.display = 'none';
-            renderChatList();
+    // Expose to global for onclick
+    window._sendFriendReq = function (toId) {
+        const result = Store.sendFriendRequest(currentUser.id, toId);
+        if (result.ok) {
+            searchFriend(); // Refresh search result
+        } else {
+            alert(result.msg);
         }
-    });
-}
+    };
 
-/* ===== Search ===== */
-function initSearch() {
-    document.getElementById('search-chat').addEventListener('input', (e) => {
-        const query = e.target.value.trim().toLowerCase();
-        const items = document.querySelectorAll('.chat-item');
-        items.forEach(item => {
-            const name = item.querySelector('.chat-name').textContent.toLowerCase();
-            const msg = item.querySelector('.chat-last-msg').textContent.toLowerCase();
-            item.style.display = (name.includes(query) || msg.includes(query)) ? 'flex' : 'none';
+    function renderFriendsList() {
+        const container = $('friendsList');
+        const friends = Store.getFriends(currentUser.id);
+
+        if (!friends.length) {
+            container.innerHTML = '<div class="empty-tip" style="padding:20px">暂无好友</div>';
+            return;
+        }
+
+        let html = '';
+        friends.forEach(fid => {
+            const isOnline = Store.isOnline(fid);
+            html += `<div class="friend-item" data-uid="${esc(fid)}">
+                <div class="avatar">${fid.charAt(0).toUpperCase()}
+                    <span class="${isOnline ? 'online-dot' : 'offline-dot'}"></span>
+                </div>
+                <div class="friend-info">
+                    <div class="friend-name">${esc(fid)}</div>
+                    <div class="friend-status">${isOnline ? '在线' : '离线'}</div>
+                </div>
+            </div>`;
         });
-    });
-}
+        container.innerHTML = html;
 
-/* ===== Utilities ===== */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+        // Click to chat
+        container.querySelectorAll('.friend-item').forEach(item => {
+            item.addEventListener('click', () => {
+                switchTab('chat');
+                setTimeout(() => openChatRoom(item.dataset.uid), 100);
+            });
+        });
+    }
 
-function formatTime(ts) {
-    const d = new Date(ts);
-    const now = new Date();
-    const diff = now - d;
+    function renderFriendRequests() {
+        const container = $('friendRequests');
+        const requests = Store.getPendingRequests(currentUser.id);
 
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+        if (!requests.length) {
+            container.innerHTML = '<div class="empty-tip" style="padding:20px">暂无新申请</div>';
+            return;
+        }
 
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) {
+        let html = '';
+        requests.forEach(req => {
+            html += `<div class="request-item slide-up">
+                <div class="avatar">${req.from.charAt(0).toUpperCase()}</div>
+                <div class="request-info">
+                    <div class="request-name">${esc(req.from)}</div>
+                    <div class="request-id">请求加你为好友</div>
+                </div>
+                <div class="request-actions">
+                    <button class="accept-btn" onclick="window._acceptFriend('${esc(req.from)}')">接受</button>
+                    <button class="reject-btn" onclick="window._rejectFriend('${esc(req.from)}')">拒绝</button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    window._acceptFriend = function (fromId) {
+        Store.acceptFriend(currentUser.id, fromId);
+        renderFriendsTab();
+    };
+
+    window._rejectFriend = function (fromId) {
+        Store.rejectFriend(currentUser.id, fromId);
+        renderFriendsTab();
+    };
+
+    // ===== Account Tab =====
+    function renderAccountTab() {
+        if (!currentUser) return;
+        $('myAvatar').textContent = currentUser.id.charAt(0).toUpperCase();
+        $('myName').textContent = currentUser.id;
+        $('myId').textContent = 'ID: ' + currentUser.id;
+        $('themeToggle').checked = Store.getTheme() === 'dark';
+    }
+
+    function handleChangePassword() {
+        const oldPwd = $('oldPwd').value;
+        const newPwd = $('newPwd').value;
+        const confirmPwd = $('confirmPwd').value;
+        const errEl = $('pwdError');
+
+        if (!oldPwd || !newPwd || !confirmPwd) {
+            errEl.textContent = '请填写所有字段';
+            return;
+        }
+        if (newPwd !== confirmPwd) {
+            errEl.textContent = '两次输入的新密码不一致';
+            return;
+        }
+        if (newPwd.length < 4) {
+            errEl.textContent = '密码至少4位';
+            return;
+        }
+
+        const result = Store.changePassword(currentUser.id, oldPwd, newPwd);
+        if (result.ok) {
+            errEl.textContent = '';
+            $('oldPwd').value = '';
+            $('newPwd').value = '';
+            $('confirmPwd').value = '';
+            closeModal('pwdModal');
+            alert('密码修改成功');
+        } else {
+            errEl.textContent = result.msg;
+        }
+    }
+
+    function handleLogout() {
+        if (!confirm('确定退出登录？')) return;
+        Store.logout(currentUser.id);
+        currentUser = null;
+        exitApp();
+    }
+
+    // ===== Theme =====
+    function handleThemeChange() {
+        const theme = $('themeToggle').checked ? 'dark' : 'light';
+        Store.setTheme(theme);
+        applyTheme(theme);
+    }
+
+    function applyTheme(theme) {
+        document.body.classList.toggle('dark', theme === 'dark');
+    }
+
+    // ===== Polling (simulate real-time) =====
+    function startPolling() {
+        stopPolling();
+        pollTimer = setInterval(() => {
+            const activeTab = document.querySelector('.tab-item.active');
+            if (!activeTab) return;
+            const tab = activeTab.dataset.tab;
+            if (tab === 'chat' && !activeChatWith) renderChatList();
+            if (tab === 'chat' && activeChatWith) renderMessages();
+            if (tab === 'friends') { renderFriendsList(); renderFriendRequests(); }
+        }, 2000);
+    }
+
+    function stopPolling() {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+
+    // ===== Modal helpers =====
+    function openModal(id) { $(id).classList.add('active'); }
+    function closeModal(id) { $(id).classList.remove('active'); }
+
+    // ===== Utility =====
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function formatTime(ts) {
+        const d = new Date(ts);
+        const now = new Date();
+        if (d.toDateString() === now.toDateString()) {
+            return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+        }
+        return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    function formatTimeFull(ts) {
+        const d = new Date(ts);
         return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
     }
 
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (d.toDateString() === yesterday.toDateString()) return '昨天';
-
-    return (d.getMonth() + 1) + '/' + d.getDate();
-}
-
-/* ===== Init ===== */
-document.addEventListener('DOMContentLoaded', () => {
-    initCalculator();
-    initTabs();
-    initAuth();
-    initFriends();
-    initContextMenu();
-    initTheme();
-    initHeaderBack();
-    initSearch();
-
-    document.getElementById('btn-send').addEventListener('click', sendMessage);
-    document.getElementById('message-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
-
-    setInterval(heartbeat, 10000);
-    heartbeat();
-});
+    // ===== Start =====
+    init();
+})();
